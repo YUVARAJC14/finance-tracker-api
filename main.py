@@ -36,7 +36,8 @@ app = FastAPI()
 @app.post("/expenses")
 def create_expense(amount: float, category: str):
     add_expense(amount, category)
-    return {"message": "Expense added", "data": expenses[-1]}
+    all_expenses = view_expenses()
+    return {"message": "Expense added", "data": all_expenses[-1]}
 
 @app.get("/expenses")
 def get_expenses():
