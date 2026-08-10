@@ -1,30 +1,35 @@
 from fastapi import FastAPI
+from database import get_connection, init_db
 
 expenses = []
 
+init_db()
 
 def add_expense(amount, category):
-    expense = {"amount": amount, "category": category}
-    expenses.append(expense)
-    print(f"Added {amount} to {category}")
+    conn = get_connection()
+    conn.execute("INSERT INTO expenses (amount, category) VALUES (?, ?)", (amount, category))
+    conn.commit()
+    conn.close()
 
 def view_expenses():
-    for i, e in enumerate(expenses):
-        print(f"{i}: {e['amount']} - {e['category']}")
+    conn = get_connection()
+    rows = conn.execute("SELECT * FROM expenses").fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
 
 def total_by_category(category):
-    total = 0
-    for e in expenses:
-        if e["category"] == category:
-            total += e["amount"]
-    return total
+    conn = get_connection()
+    result = conn.execute(
+        "SELECT SUM(amount) as total FROM expenses WHERE category = ?", (category,)
+    ).fetchone()
+    conn.close()
+    return result["total"] or 0
 
-def delete_expense(index):
-    if 0 <= index < len(expenses):
-        removed = expenses.pop(index)
-        print(f"Removed {removed['amount']} from {removed['category']}")
-    else:
-        print("Invalid index")
+def delete_expense(expense_id):
+    conn = get_connection()
+    conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    conn.commit()
+    conn.close()
 
 app = FastAPI()
 
@@ -35,7 +40,7 @@ def create_expense(amount: float, category: str):
 
 @app.get("/expenses")
 def get_expenses():
-    return expenses
+    return view_expenses()
 
 @app.get("/expenses/total/{category}")
 def get_total(category: str):
