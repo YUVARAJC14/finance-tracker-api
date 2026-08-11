@@ -1,18 +1,23 @@
 from fastapi import FastAPI
 from database import get_connection, init_db
 from pydantic import BaseModel, Field
+import datetime
 
 class ExpenseCreate(BaseModel):
     amount: float = Field(gt=0, description="Amount must be greater than 0")
     category: str = Field(min_length=1, description="Category cannot be empty")
+    date: datetime.date = Field(default_factory=datetime.date.today, description="Date of expense")
 
 expenses = []
 
 init_db()
 
-def add_expense(amount, category):
+def add_expense(amount, category, expense_date):
     conn = get_connection()
-    conn.execute("INSERT INTO expenses (amount, category) VALUES (?, ?)", (amount, category))
+    conn.execute(
+        "INSERT INTO expenses (amount, category, date) VALUES (?, ?, ?)",
+        (amount, category, str(expense_date))
+    )
     conn.commit()
     conn.close()
 
@@ -40,7 +45,7 @@ app = FastAPI()
 
 @app.post("/expenses")
 def create_expense(expense: ExpenseCreate):
-    add_expense(expense.amount, expense.category)
+    add_expense(expense.amount, expense.category, expense.date)
     all_expenses = view_expenses()
     return {"message": "Expense added", "data": all_expenses[-1]}
 

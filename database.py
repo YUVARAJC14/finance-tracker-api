@@ -11,7 +11,8 @@ def init_db():
         CREATE TABLE IF NOT EXISTS expenses (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             amount REAL NOT NULL,
-            category TEXT NOT NULL
+            category TEXT NOT NULL,
+            date TEXT NOT NULL
         )
     """)
     conn.commit()
