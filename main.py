@@ -41,6 +41,17 @@ def delete_expense(expense_id):
     conn.commit()
     conn.close()
 
+def total_by_month():
+    conn = get_connection()
+    rows = conn.execute("""
+        SELECT strftime('%Y-%m', date) as month, SUM(amount) as total
+        FROM expenses
+        GROUP BY month
+        ORDER BY month
+    """).fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
 app = FastAPI()
 
 @app.post("/expenses")
@@ -61,3 +72,7 @@ def get_total(category: str):
 def remove_expense(index: int):
     delete_expense(index)
     return {"message": f"Deleted expense at index {index}"}
+
+@app.get("/expenses/summary/monthly")
+def get_monthly_summary():
+    return total_by_month()
