@@ -1,5 +1,10 @@
 from fastapi import FastAPI
 from database import get_connection, init_db
+from pydantic import BaseModel, Field
+
+class ExpenseCreate(BaseModel):
+    amount: float = Field(gt=0, description="Amount must be greater than 0")
+    category: str = Field(min_length=1, description="Category cannot be empty")
 
 expenses = []
 
@@ -34,8 +39,8 @@ def delete_expense(expense_id):
 app = FastAPI()
 
 @app.post("/expenses")
-def create_expense(amount: float, category: str):
-    add_expense(amount, category)
+def create_expense(expense: ExpenseCreate):
+    add_expense(expense.amount, expense.category)
     all_expenses = view_expenses()
     return {"message": "Expense added", "data": all_expenses[-1]}
 
