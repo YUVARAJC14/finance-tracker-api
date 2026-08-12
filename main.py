@@ -1,5 +1,6 @@
 from fastapi import FastAPI
-from database import get_connection, init_db
+from database import get_session, init_db, Expense
+from sqlalchemy import func
 from pydantic import BaseModel, Field
 import datetime
 import os
@@ -25,72 +26,64 @@ expenses = []
 init_db()
 
 def add_expense(amount, category, expense_date):
-    conn = get_connection()
-    conn.execute(
-        "INSERT INTO expenses (amount, category, date) VALUES (?, ?, ?)",
-        (amount, category, str(expense_date))
-    )
-    conn.commit()
-    conn.close()
+    session = get_session()
+    expense = Expense(amount=amount, category=category, date=expense_date)
+    session.add(expense)
+    session.commit()
+    session.refresh(expense)
+    result = {"id": expense.id, "amount": expense.amount, "category": expense.category, "date": str(expense.date)}
+    session.close()
+    return result
 
 def view_expenses(limit=10, offset=0, category=None):
-    conn = get_connection()
+    session = get_session()
+    query = session.query(Expense)
     if category:
-        rows = conn.execute(
-            "SELECT * FROM expenses WHERE category = ? LIMIT ? OFFSET ?",
-            (category, limit, offset)
-        ).fetchall()
-    else:
-        rows = conn.execute(
-            "SELECT * FROM expenses LIMIT ? OFFSET ?",
-            (limit, offset)
-        ).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+        query = query.filter(Expense.category == category)
+    rows = query.limit(limit).offset(offset).all()
+    result = [{"id": r.id, "amount": r.amount, "category": r.category, "date": str(r.date)} for r in rows]
+    session.close()
+    return result
 
 def total_by_category(category):
-    conn = get_connection()
-    result = conn.execute(
-        "SELECT SUM(amount) as total FROM expenses WHERE category = ?", (category,)
-    ).fetchone()
-    conn.close()
-    return result["total"] or 0
+    session = get_session()
+    total = session.query(func.sum(Expense.amount)).filter(Expense.category == category).scalar()
+    session.close()
+    return total or 0
 
 def delete_expense(expense_id):
-    conn = get_connection()
-    conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
-    conn.commit()
-    conn.close()
+    session = get_session()
+    expense = session.query(Expense).filter(Expense.id == expense_id).first()
+    if expense:
+        session.delete(expense)
+        session.commit()
+    session.close()
 
 def total_by_month():
-    conn = get_connection()
-    rows = conn.execute("""
-        SELECT strftime('%Y-%m', date) as month, SUM(amount) as total
-        FROM expenses
-        GROUP BY month
-        ORDER BY month
-    """).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    session = get_session()
+    rows = session.query(
+        func.strftime('%Y-%m', Expense.date).label('month'),
+        func.sum(Expense.amount).label('total')
+    ).group_by('month').order_by('month').all()
+    session.close()
+    return [{"month": r.month, "total": r.total} for r in rows]
 
 def total_by_category_and_month():
-    conn = get_connection()
-    rows = conn.execute("""
-        SELECT strftime('%Y-%m', date) as month, category, SUM(amount) as total
-        FROM expenses
-        GROUP BY month, category
-        ORDER BY month, category
-    """).fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    session = get_session()
+    rows = session.query(
+        func.strftime('%Y-%m', Expense.date).label('month'),
+        Expense.category,
+        func.sum(Expense.amount).label('total')
+    ).group_by('month', Expense.category).order_by('month', Expense.category).all()
+    session.close()
+    return [{"month": r.month, "category": r.category, "total": r.total} for r in rows]
 
 app = FastAPI()
 
 @app.post("/expenses", dependencies=[Depends(verify_api_key)])
 def create_expense(expense: ExpenseCreate):
-    add_expense(expense.amount, expense.category, expense.date)
-    all_expenses = view_expenses()
-    return {"message": "Expense added", "data": all_expenses[-1]}
+    result = add_expense(expense.amount, expense.category, expense.date)
+    return {"message": "Expense added", "data": result}
 
 @app.get("/expenses")
 def get_expenses(limit: int = 10, offset: int = 0, category: Optional[str] = None):

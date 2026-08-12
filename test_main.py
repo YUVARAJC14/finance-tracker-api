@@ -1,5 +1,5 @@
 import os
-os.environ["DB_NAME"] = "test_expenses.db"
+os.environ["DATABASE_URL"] = "sqlite:///test_expenses.db"
 
 import pytest
 from fastapi.testclient import TestClient
