@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 import datetime
 import os
 from dotenv import load_dotenv
+from typing import Optional
 from fastapi import Depends, HTTPException, Header
 
 load_dotenv()
@@ -32,9 +33,18 @@ def add_expense(amount, category, expense_date):
     conn.commit()
     conn.close()
 
-def view_expenses():
+def view_expenses(limit=10, offset=0, category=None):
     conn = get_connection()
-    rows = conn.execute("SELECT * FROM expenses").fetchall()
+    if category:
+        rows = conn.execute(
+            "SELECT * FROM expenses WHERE category = ? LIMIT ? OFFSET ?",
+            (category, limit, offset)
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT * FROM expenses LIMIT ? OFFSET ?",
+            (limit, offset)
+        ).fetchall()
     conn.close()
     return [dict(row) for row in rows]
 
@@ -83,8 +93,8 @@ def create_expense(expense: ExpenseCreate):
     return {"message": "Expense added", "data": all_expenses[-1]}
 
 @app.get("/expenses")
-def get_expenses():
-    return view_expenses()
+def get_expenses(limit: int = 10, offset: int = 0, category: Optional[str] = None):
+    return view_expenses(limit=limit, offset=offset, category=category)
 
 @app.get("/expenses/total/{category}")
 def get_total(category: str):
