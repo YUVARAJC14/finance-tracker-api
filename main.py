@@ -2,6 +2,17 @@ from fastapi import FastAPI
 from database import get_connection, init_db
 from pydantic import BaseModel, Field
 import datetime
+import os
+from dotenv import load_dotenv
+from fastapi import Depends, HTTPException, Header
+
+load_dotenv()
+
+API_KEY = os.getenv("API_KEY")
+
+def verify_api_key(x_api_key: str = Header(...)):
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
 
 class ExpenseCreate(BaseModel):
     amount: float = Field(gt=0, description="Amount must be greater than 0")
@@ -65,7 +76,7 @@ def total_by_category_and_month():
 
 app = FastAPI()
 
-@app.post("/expenses")
+@app.post("/expenses", dependencies=[Depends(verify_api_key)])
 def create_expense(expense: ExpenseCreate):
     add_expense(expense.amount, expense.category, expense.date)
     all_expenses = view_expenses()
@@ -79,7 +90,7 @@ def get_expenses():
 def get_total(category: str):
     return {"category": category, "total": total_by_category(category)}
 
-@app.delete("/expenses/{index}")
+@app.delete("/expenses/{index}", dependencies=[Depends(verify_api_key)])
 def remove_expense(index: int):
     delete_expense(index)
     return {"message": f"Deleted expense at index {index}"}
